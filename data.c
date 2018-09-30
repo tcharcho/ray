@@ -183,7 +183,7 @@ int i;
       printf("output file image.ppm created\n");
 }
 
-void* processPixel(void* rank){
+void* processPixels(void* rank){
 	long my_rank = (long) rank;
    int local_height = HEIGHT/threads; 
    int my_first_row = my_rank*local_height;
@@ -362,7 +362,7 @@ int main(int argc, char *argv[]){
 
 	for (thread = 0; thread < threads; thread++)  
 	pthread_create(&thread_handles[thread], NULL,
-		processPixel, (void*) thread);  
+		processPixels, (void*) thread);  
 
    for (thread = 0; thread < threads; thread++) 
       pthread_join(thread_handles[thread], NULL); 
