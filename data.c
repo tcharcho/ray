@@ -193,8 +193,6 @@ void* processPixel(void* rank){
 		my_last_row += HEIGHT%threads;
 	}
 
-	// printf("Thread %ld: first row = %d   last row = %d\n", my_rank, my_first_row, my_last_row);
-
 	int x, y;
    ray r;
 
