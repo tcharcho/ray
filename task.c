@@ -9,6 +9,8 @@
 #include <stdbool.h> /* Needed for boolean datatype */
 #include <math.h>
 #include <string.h>
+#include <pthread.h>
+#include <time.h>
 
 	/* added scale and threads to allow command line controls */
 	/* scale controls how many times the height and width will increase */
@@ -21,7 +23,9 @@ int threads = 1;
 int output = 0;
 
 /* Number of tasks that need to be split up, based on threads entered */
-int tasks;
+int tasks = 3;
+int currentSphere = -1;
+int count = 0;
 
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
@@ -32,20 +36,20 @@ int tasks;
 
 /* The vector structure */
 typedef struct{
-      float x,y,z;
+   float x,y,z;
 }vector;
 
 /* The sphere */
 typedef struct{
-        vector pos;
-        float  radius;
+   vector pos;
+   float  radius;
    int material;
 }sphere; 
 
 /* The ray */
 typedef struct{
-        vector start;
-        vector dir;
+   vector start;
+   vector dir;
 }ray;
 
 /* Colour */
@@ -64,6 +68,14 @@ typedef struct{
    vector pos;
    colour intensity;
 }light;
+
+/* Arguments to send to thread */
+typedef struct {
+   long rank;
+   ray r;
+   sphere* spheres;
+   float t;
+} threadArgs;
 
 /* Subtract two vectors and return the resulting vector */
 vector vectorSub(vector *v1, vector *v2){
@@ -175,42 +187,55 @@ void readArgs(int argc, char *argv[]) {
       printf("no output file created\n");
    else
       printf("output file image.ppm created\n");
-
-	if (threads < 6)
-		tasks = 3;
-	else if (threads >= 6 && threads < 9)
-		tasks = 6;
-	else
-		tasks = 9;
 }
 
-void* process3Tasks(void* rank){
-	long my_rank = (long) rank;
-   int local_tasks = tasks/threads;
-   int my_first_row = my_rank*local_height;
-   int my_last_row = (my_rank+1)*local_height - 1;
+void* processTasks(void* arguments){
+   threadArgs* args = (threadArgs*) arguments;
+	long my_rank = (long)args->rank;
+   sphere* spheres = args->spheres;
+   ray r = args->r;
+   float t = args->t; 
+
+   if (my_rank >= tasks) return NULL;
+
+   int local_tasks = tasks/min(threads, tasks);
+   int my_first_i = my_rank*local_tasks;
+   int my_last_i = (my_rank+1)*local_tasks - 1;
 
 	if (my_rank == (threads-1)){
-		my_last_row += HEIGHT%threads;
+		my_last_i += tasks%threads;
 	}
 
-	return NULL;
-}
+   printf("Thread %ld: first iteration = %d   last iteration = %d\n", my_rank, my_first_i, my_last_i);
 
-void* process6Tasks(void* rank){
-	return NULL;
-}
+   // printf("start x: %f\n", r.start.x);
+   // printf("start y: %f\n", r.start.y);
+   // printf("start z: %f\n", r.start.z);
+   printf("dir x: %f\n", r.dir.x);
+   // printf("dir y: %f\n", r.dir.y);
+   // printf("dir z: %f\n", r.dir.z);
 
-void* process9Tasks(void* rank){
+
+   // unsigned int i;
+   // for(i = my_first_i; i <= my_last_i; i++){
+   //    if(intersectRaySphere(&r, &spheres[i], &t)){
+   //       count += 1;
+   //       currentSphere = i;
+   //    }
+   // }
+
 	return NULL;
 }
 
 
 int main(int argc, char *argv[]){
-
+   readArgs(argc, argv);
    ray r;
 
-   readArgs(argc, argv);
+   long       thread;
+   pthread_t* thread_handles;
+
+	thread_handles = malloc (threads*sizeof(pthread_t)); 
    
    material materials[3];
    materials[0].diffuse.red = 1;
@@ -278,6 +303,7 @@ int main(int argc, char *argv[]){
    int x, y;
 
 	/*** start timing here ****/
+	clock_t tick = clock();
 
    for(y=0;y<HEIGHT;y++){
       for(x=0;x<WIDTH;x++){
@@ -307,7 +333,26 @@ int main(int argc, char *argv[]){
                if(intersectRaySphere(&r, &spheres[i], &t))
                   currentSphere = i;
             }
-            if(currentSphere == -1) break;
+
+            if (x == 0 && y == 0){
+               for (thread = 0; thread < threads; thread++){
+                  threadArgs* arguments = malloc(sizeof(threadArgs));
+                  arguments->rank = thread;
+                  arguments->r = r;
+                  arguments->spheres = spheres;
+                  arguments->t = t;
+                  pthread_create(&thread_handles[thread], NULL, processTasks, (void*)arguments); 
+               }
+
+               for (thread = 0; thread < threads; thread++) 
+                  pthread_join(thread_handles[thread], NULL); 
+            }
+
+            
+
+            if(currentSphere == -1){
+               break;
+            } 
             
             vector scaled = vectorScale(t, &r.dir);
             vector newStart = vectorAdd(&r.start, &scaled);
@@ -372,12 +417,20 @@ int main(int argc, char *argv[]){
 
       }
    }
+   free(thread_handles);
 
-      /*** end timing here ***/
+
+   /*** end timing here ***/
+	clock_t tock = clock();
+
    
 	/* only create output file image.ppm when -o is included on command line */
    if (output != 0)
       saveppm("image.ppm", img, WIDTH, HEIGHT);
-   
-return 0;
+
+   double time_spent = (double)(tock - tick) / CLOCKS_PER_SEC;
+	printf("Execution time: %lf seconds\n", time_spent);
+
+   printf("%d\n", count);   
+   return 0;
 }

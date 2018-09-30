@@ -20,6 +20,8 @@ int threads = 1;
 	/* using the -o on the command line sets output==1 (creates the file) */
 int output = 0;
 
+int count = 0;
+
 
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
@@ -35,8 +37,8 @@ typedef struct{
 
 /* The sphere */
 typedef struct{
-        vector pos;
-        float  radius;
+   vector pos;
+   float  radius;
    int material;
 }sphere; 
 
@@ -273,10 +275,14 @@ int main(int argc, char *argv[]){
             
             unsigned int i;
             for(i = 0; i < 3; i++){
-               if(intersectRaySphere(&r, &spheres[i], &t))
+               if(intersectRaySphere(&r, &spheres[i], &t)){
+                  count += 1;
                   currentSphere = i;
+               }
             }
-            if(currentSphere == -1) break;
+            if(currentSphere == -1){
+               break;
+            } 
             
             vector scaled = vectorScale(t, &r.dir);
             vector newStart = vectorAdd(&r.start, &scaled);
@@ -348,5 +354,6 @@ int main(int argc, char *argv[]){
    if (output != 0)
       saveppm("image.ppm", img, WIDTH, HEIGHT);
    
-return 0;
+   printf("%d\n", count);
+   return 0;
 }
